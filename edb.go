@@ -35,7 +35,10 @@ func (db *DB) Open(path string) error {
 
 // Close closes the underlying database.
 func (db *DB) Close() error {
-	return db.db.Close()
+	if db.db != nil {
+		db.db.Close()
+	}
+	return nil
 }
 
 // SaveEvents stores events in the database.
@@ -83,8 +86,9 @@ func (db *DB) Events() ([]Event, error) {
 
 // Event returns a genericized event.
 type Event struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Username string `json:"username"`
-	Target   string `json:"target"`
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	Username   string `json:"username"`
+	Actor      string `json:"actor"`
+	Repository string `json:"repository"`
 }
