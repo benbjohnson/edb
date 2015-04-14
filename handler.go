@@ -33,8 +33,14 @@ func (h *Handler) serveEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write events to response.
-	if err := json.NewEncoder(w).Encode(a); err != nil {
+	// Marshal events with pretty printing.
+	b, err := json.MarshalIndent(a, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := w.Write(b); err != nil {
 		log.Print(err)
 	}
 }
