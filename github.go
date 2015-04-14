@@ -1,7 +1,6 @@
 package edb
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -58,12 +57,13 @@ func (f *GitHubFetcher) Run(closing chan struct{}) {
 		f.Logger.Printf("received %d events (remaining=%d)", len(a), resp.Rate.Remaining)
 
 		// Convert events.
-		var events []*Event
+		var events []Event
 		for _, ghe := range a {
-			e := &Event{
-				ID:       *ghe.ID,
-				Type:     *ghe.Type,
-				Username: f.Username,
+			e := Event{
+				ID:        *ghe.ID,
+				Type:      *ghe.Type,
+				Timestamp: *ghe.CreatedAt,
+				Username:  f.Username,
 			}
 			if ghe.Actor != nil {
 				e.Actor = *ghe.Actor.Login
@@ -73,9 +73,6 @@ func (f *GitHubFetcher) Run(closing chan struct{}) {
 			}
 
 			events = append(events, e)
-
-			b, _ := json.Marshal(e)
-			f.Logger.Println(string(b))
 		}
 
 		// Save events to database.

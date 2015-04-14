@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"sync"
 
@@ -89,6 +90,10 @@ func (m *Main) Run(args ...string) error {
 
 	// Start fetchers.
 	m.startFetchers(config.AccessToken, config.Usernames)
+
+	// Start HTTP server.
+	h := &edb.Handler{DB: m.DB}
+	m.logger.Print(http.ListenAndServe(":13000", h))
 
 	return nil
 }

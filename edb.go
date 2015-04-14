@@ -2,6 +2,10 @@ package edb
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"sort"
+	"time"
 
 	"github.com/boltdb/bolt"
 )
@@ -52,8 +56,14 @@ func (db *DB) SaveEvents(events []Event) error {
 				return err
 			}
 
+			// Create actor bucket.
+			eventsBkt := tx.Bucket([]byte("events"))
+			bkt, err := eventsBkt.CreateBucketIfNotExists([]byte(e.Actor))
+			if err != nil {
+				return err
+			}
+
 			// Insert event into database.
-			bkt := tx.Bucket([]byte("events"))
 			if err := bkt.Put([]byte(e.ID), b); err != nil {
 				return err
 			}
@@ -63,13 +73,18 @@ func (db *DB) SaveEvents(events []Event) error {
 	})
 }
 
-// Events returns a list of events from the database.
-func (db *DB) Events() ([]Event, error) {
+// EventsByActor returns a list of events from the database for a single actor.
+func (db *DB) EventsByActor(actor string) ([]Event, error) {
 	var events []Event
 	err := db.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket([]byte("events"))
-		c := bkt.Cursor()
+		// Retrieve actor bucket.
+		bkt := tx.Bucket([]byte("events")).Bucket([]byte(actor))
+		if bkt == nil {
+			return nil
+		}
 
+		// Iterate over all events.
+		c := bkt.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var e Event
 			if err := json.Unmarshal(v, &e); err != nil {
@@ -84,11 +99,59 @@ func (db *DB) Events() ([]Event, error) {
 	return events, err
 }
 
+// Events returns a list of all events from the database.
+func (db *DB) Events() ([]Event, error) {
+	var events []Event
+	err := db.db.View(func(tx *bolt.Tx) error {
+		eventBkt := tx.Bucket([]byte("events"))
+
+		return eventBkt.ForEach(func(actor, _ []byte) error {
+			// Retrieve actor bucket.
+			bkt := eventBkt.Bucket(actor)
+
+			// Iterate over all events.
+			c := bkt.Cursor()
+			for k, v := c.First(); k != nil; k, v = c.Next() {
+				var e Event
+				if err := json.Unmarshal(v, &e); err != nil {
+					return err
+				}
+				events = append(events, e)
+			}
+
+			return nil
+		})
+	})
+
+	// Sort events by timestamp.
+	sort.Sort(Events(events))
+
+	return events, err
+}
+
 // Event returns a genericized event.
 type Event struct {
-	ID         string `json:"id"`
-	Type       string `json:"type"`
-	Username   string `json:"username"`
-	Actor      string `json:"actor"`
-	Repository string `json:"repository"`
+	ID         string    `json:"id"`
+	Type       string    `json:"type"`
+	Timestamp  time.Time `json:"timestamp"`
+	Username   string    `json:"username"`
+	Actor      string    `json:"actor"`
+	Repository string    `json:"repository"`
 }
+
+type Events []Event
+
+func (a Events) Len() int {
+	return len(a)
+}
+
+func (a Events) Less(i, j int) bool {
+	return a[i].Timestamp.Before(a[j].Timestamp)
+}
+
+func (a Events) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func warn(v ...interface{})              { fmt.Fprintln(os.Stderr, v...) }
+func warnf(msg string, v ...interface{}) { fmt.Fprintf(os.Stderr, msg+"\n", v...) }
